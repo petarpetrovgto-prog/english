@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Range Trainer vT7</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#0f1520; --panel2:#101827; --border:#223047; --text:#e7ecf3;
+    --FOLD:#f4f6fa; --L-F-F:#a7e8a7; --L-C-F:#155d15; --L-C-AI:#bcdcf3; --L-R-AI:#0b3a94;
+    --MR-F-F:#ffe27a; --MR-C-AI:#7b4a2a; --MR-4B-AI:#e44747; --SHOVE:#6d4b8e;
+    --ok:#1f9d55; --err:#d64545;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  body{margin:0;background:var(--bg);color:var(--text);font:16px/1.35 -apple-system,system-ui,Segoe UI,Roboto,Arial}
+
+  .top{position:sticky;top:0;z-index:30;display:flex;justify-content:space-between;align-items:center;
+       padding:6px 8px;background:var(--panel2);border-bottom:1px solid var(--border)}
+  .chip{padding:3px 8px;border:1px solid var(--border);border-radius:999px;background:#0f1624;font-size:12px;display:inline-flex;gap:6px;align-items:center}
+  .chip b{display:inline-block;min-width:2.2ch;text-align:center;font-variant-numeric:tabular-nums}
+  .btn{border:1px solid var(--border);background:#0f1624;color:var(--text);border-radius:12px;
+       padding:10px 14px;font-weight:800;cursor:pointer}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  .wrap{max-width:1100px;margin:0 auto;padding:10px}
+  .grid{display:grid;gap:10px}
+  @media(min-width:980px){.grid{grid-template-columns:1.1fr 0.9fr}}
+  .card{border:1px solid var(--border);background:#0f1624;border-radius:14px;padding:12px}
+  .card h3{margin:0 0 8px;font-size:16px;display:flex;align-items:center;justify-content:space-between}
+  .toggle{font-size:12px;opacity:.9}
+  .hidden{display:none}
+
+  .qTop{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  .qHand{font-size:26px;font-weight:900}
+
+  /* actions */
+  .actionsGrid{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0,1fr));
+    gap:10px;
+  }
+  .actBtn{
+    position:relative;border:2px solid rgba(0,0,0,.18);border-radius:13px;
+    padding:16px 10px;font-size:16px;font-weight:1000;letter-spacing:.3px;
+    color:#000; box-shadow:0 4px 14px rgba(0,0,0,.25);
+    transform:translateY(0); transition:transform .06s ease, filter .06s ease, box-shadow .06s ease;
+  }
+  .actBtn:active{transform:translateY(1px); filter:brightness(.96)}
+  .actBtn.ok{box-shadow:0 0 0 3px rgba(31,157,85,.55)}
+  .actBtn.err{box-shadow:0 0 0 3px rgba(214,69,69,.55)}
+  .actBtn .lbl{display:block;white-space:normal;overflow-wrap:anywhere;line-height:1.05}
+  .tag{position:absolute;right:8px;top:6px;font-size:11px;opacity:.7;color:#000}
+
+  /* keypad (for PUSH) */
+  .disp{margin:4px 0 8px;border:2px solid var(--border);background:#0b1220;border-radius:10px;padding:10px;
+        font-weight:900;text-align:center}
+  .disp.ok{border-color:var(--ok); box-shadow:0 0 0 3px rgba(31,157,85,.45)}
+  .disp.err{border-color:var(--err); box-shadow:0 0 0 3px rgba(214,69,69,.45)}
+  .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .key{border:1px solid var(--border);background:#111a2b;border-radius:12px;padding:16px 0;font-weight:900;font-size:20px}
+  .key.wide{grid-column:span 2}
+
+  .feedback{margin-top:10px;font-weight:900}
+  .ok{color:var(--ok)} .err{color:var(--err)}
+  .resRow{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 10px;
+          border:1px dashed #2a3b58;border-radius:10px;margin-top:8px}
+  .val{font-weight:900;padding:6px 8px;border-radius:8px;min-width:96px;text-align:center}
+
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:#0f1624;
+         border-radius:999px;padding:6px 10px;font-weight:800;cursor:pointer}
+  .badge input{accent-color:#4da3ff}
+  .mini{font-size:12px;opacity:.8}
+  .sep{height:1px;background:#223047;margin:10px 0}
+
+  /* modals */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:60;align-items:center;justify-content:center;padding:16px}
+  .overlay.show{display:flex}
+  .box{width:100%;max-width:680px;background:#0f1520;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .boxHead{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#101827;border-bottom:1px solid var(--border)}
+  .boxBody{padding:10px 12px}
+  .boxFoot{display:flex;gap:8px;justify-content:space-between;padding:10px 12px;border-top:1px solid var(--border);background:#0f1520}
+  textarea{width:100%;min-height:260px;background:#0b1220;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;font:14px/1.35 ui-monospace}
+
+  @media (max-width: 480px){
+    .grid{gap:8px}
+    .actionsGrid{gap:8px}
+    .actBtn{padding:12px 6px;font-size:14px;border-radius:12px}
+    .tag{top:4px;right:6px;font-size:10px}
+  }
+  @media (max-width: 380px){
+    .actBtn{padding:10px 6px;font-size:13px}
+  }
+
+  /* ---- Joker panel ---- */
+  #jokerPanel{display:none;margin-top:12px;border:1px dashed var(--border);border-radius:10px;padding:10px;background:#0f1624}
+  #jokerHead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+  #jokerModeName{font-size:12px;opacity:.85}
+
+  /* 13x13 table */
+  .jokerGrid{display:grid;grid-template-columns:repeat(13,1fr);gap:1px}
+  .jk{aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;font-weight:800;border:1px solid #222;
+      font-size:11px;line-height:1;text-align:center;padding:0 2px}
+  .jk.cur{outline:3px solid #4da3ff}
+  @media(max-width:480px){ .jk{font-size:9px} }
+  @media(max-width:380px){ .jk{font-size:8px} }
+
+  /* Flash cards */
+  .flashWrap{display:flex;flex-wrap:wrap;gap:6px}
+  .flashChip{border:1px solid rgba(0,0,0,.2);border-radius:10px;padding:6px 8px;font-weight:800}
+  .flashTitle{font-size:12px;opacity:.85;margin-bottom:6px}
+
+  /* click “Correct:” -> next hand (no animation) */
+  #correctVal.clickable{cursor:pointer}
+
+  /* simple full-screen preloader */
+  #preload{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;z-index:80;align-items:center;justify-content:center}
+  #preload.show{display:flex}
+  .spinner{border:4px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;width:44px;height:44px;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div style="display:flex;gap:6px;align-items:center">
+    <span class="chip">Q: <b id="qCount">0</b></span>
+    <span class="chip">✔: <b id="qRight">0</b></span>
+    <span class="chip">🔥: <b id="streak">0</b></span>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="btn" id="btnEdit">Editor</button>
+  </div>
+</div>
+
+<div class="wrap grid">
+  <!-- QUIZ -->
+  <div class="card">
+    <h3>Quiz</h3>
+    <div class="qTop">
+      <div class="qHand" id="qHand">—</div>
+      <div id="qStack">Stack: —</div>
+      <div id="qPos">Position: —</div>
+    </div>
+
+    <div id="ansArea"></div>
+
+    <div id="feedback" class="feedback"></div>
+    <div id="correctRow" class="resRow" style="display:none">
+      <div>Correct:</div>
+      <div id="correctVal" class="val">—</div>
+    </div>
+
+    <!-- Joker panel -->
+    <div id="jokerPanel">
+      <div id="jokerHead">
+        <button id="btnJokerMode" class="btn">Switch Joker</button>
+        <span id="jokerModeName" class="mini"></span>
+      </div>
+      <div id="jokerContent"></div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button id="btnCheck" class="btn" style="flex:1;font-weight:900" disabled>Check</button>
+      <button id="btnNext" class="btn" style="flex:1;font-weight:900" disabled>Next</button>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="card" id="settingsCard">
+    <h3>
+      Settings
+      <button id="toggleSettings" class="btn toggle">Hide</button>
+    </h3>
+
+    <div class="mini">Positions to train (select specific positions):</div>
+    <div id="posFilters" class="row"></div>
+
+    <div class="sep"></div>
+
+    <div class="mini">Stack ranges (select specific ranges):</div>
+    <div id="stkFilters" class="row"></div>
+
+    <div class="sep"></div>
+
+    <div class="row">
+      <button id="btnStart" class="btn" style="flex:1;font-weight:900" disabled>Start / Restart</button>
+      <button id="btnResetScore" class="btn" style="flex:1;font-weight:900" disabled>Reset score</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDITOR -->
+<div id="editModal" class="overlay">
+  <div class="box">
+    <div class="boxHead">
+      <div><b>Editor</b> <span id="editMeta" class="mini"></span></div>
+      <button id="editClose" class="btn">X</button>
+    </div>
+    <div class="boxBody">
+      <div class="row">
+        <select id="editPos" class="btn" style="flex:1"></select>
+        <select id="editStk" class="btn" style="flex:1"></select>
+      </div>
+      <div class="row mini">Format: <code>HAND = ACTION</code> or <code>default = ACTION</code>; for PUSH — number.</div>
+      <textarea id="editArea" placeholder="AJo = L-C-AI&#10;default = Fold"></textarea>
+    </div>
+    <div class="boxFoot">
+      <button id="editClear" class="btn">Clear this cell</button>
+      <div><button id="editSave" class="btn">Save</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Preloader -->
+<div id="preload" class="show" aria-live="polite" aria-busy="true">
+  <div class="spinner" title="Loading…"></div>
+</div>
+
+<!-- Firebase + App -->
+<script type="module">
+/* -----------------------------------------------------------
+   1) Firebase imports
+----------------------------------------------------------- */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore, collection, doc, getDocs, getDoc, setDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+/* -----------------------------------------------------------
+   2) Firebase config (PUT YOUR KEYS HERE)
+      Replace the placeholder object below with your real config
+      from Firebase Console → Project settings → General → Your apps
+----------------------------------------------------------- */
+const firebaseConfig = {
+  /* ==== REPLACE THIS WITH YOUR CONFIG ==== */
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MSG_ID",
+  appId: "YOUR_APP_ID"
+  /* ====================================== */
+};
+
+/* -----------------------------------------------------------
+   3) Initialize Firebase + Firestore
+----------------------------------------------------------- */
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+
+/* -----------------------------------------------------------
+   4) App logic
+----------------------------------------------------------- */
+(function(){
+  // Colors / actions
+  const COLORS={"FOLD":"#f4f6fa","L-F-F":"#a7e8a7","L-C-F":"#155d15","L-C-AI":"#bcdcf3","L-R-AI":"#0b3a94","MR-F-F":"#ffe27a","MR-C-AI":"#7b4a2a","MR-4B-AI":"#e44747","SHOVE":"#6d4b8e"};
+  const norm=s=>(s||"").toUpperCase().replace(/\s+/g,"");
+  const isPushPos=p=>/PUSH/i.test(p);
+
+  const alias=(key,act)=>{
+    const up=(act||"").toUpperCase();
+    if(!(key==="BBvsSB_L"||key==="HUBB_L"||key==="HUBB_MR"||key==="BBvsBU_MR"||key==="SBvsBU_MR"||key==="BBvsSB_MR"))
+      return{d:act,c:null};
+    if(up==="MR-F-F")return{d:"Check/Call",c:COLORS["MR-F-F"]};
+    if(up==="L-C-AI")return{d:"ISO/3bet",c:COLORS["L-C-AI"]};
+    if(up==="SHOVE")return{d:"ISO/3bet AI",c:COLORS["SHOVE"]};
+    if(up==="MR-4B-AI")return{d:"ISO/3bet/Fold",c:COLORS["MR-4B-AI"]};
+    return{d:act,c:null};
+  };
+
+  function resolveDisplay(key, act){
+    const ali = alias(key, act);
+    return {
+      text: ali.d,
+      color: ali.c || COLORS[norm(act)] || ""
+    };
+  }
+
+  // Positions / stacks
+  const POS_LIST=["HUSB","BU","HUBB_L","HUBB_MR","HUBBv_PUSH","SBvsBU","SBvsBU_PUSH","SBvsBB","BBvsBU_MR","BBvsBU_PUSH","BBvsSB_L","BBvsSB_MR","BBvsSB_PUSH"];
+  const STKS=["0–4","4–7","7–10","10–13","13+"];
+
+  // Hands – ONLY from the list below
+  const HANDS = `
+AA
+KK
+QQ
+JJ
+TT
+99
+88
+77
+66
+55
+44
+33
+22
+AKs
+AKo
+AQs
+AQo
+AJs
+AJo
+ATs
+ATo
+A9s
+A9o
+A8s
+A8o
+A7s
+A7o
+A6s
+A6o
+A5s
+A5o
+A4s
+A4o
+A3s
+A3o
+A2s
+A2o
+KQs
+KQo
+KJs
+KJo
+KTs
+KTo
+K9s
+K9o
+K8s
+K8o
+K7s
+K7o
+K6s
+K6o
+K5s
+K5o
+K4s
+K4o
+K3s
+K3o
+K2s
+K2o
+QJs
+QJo
+QTs
+QTo
+Q9s
+Q9o
+Q8s
+Q8o
+Q7s
+Q7o
+Q6s
+Q6o
+Q5s
+Q5o
+Q4s
+Q4o
+Q3s
+Q3o
+Q2s
+Q2o
+JTs
+JTo
+J9s
+J9o
+J8s
+J8o
+J7s
+J7o
+J6s
+J6o
+J5s
+J5o
+J4s
+J4o
+J3s
+J3o
+J2s
+J2o
+T9s
+T9o
+T8s
+T8o
+T7s
+T7o
+T6s
+T6o
+T5s
+T5o
+T4s
+T4o
+T3s
+T3o
+T2s
+T2o
+98s
+98o
+97s
+97o
+96s
+96o
+95s
+95o
+94s
+94o
+93s
+93o
+92s
+92o
+87s
+87o
+86s
+86o
+85s
+85o
+84s
+84o
+83s
+83o
+82s
+82o
+76s
+76o
+75s
+75o
+74s
+74o
+73s
+73o
+72s
+72o
+65s
+65o
+64s
+64o
+63s
+63o
+62s
+62o
+54s
+54o
+53s
+53o
+52s
+52o
+43s
+43o
+42s
+42o
+32s
+32o
+`.trim().split(/\s+/);
+
+  /* ===========================
+     Online DB (Firestore) layer
+     =========================== */
+  // In-memory cache for quick sync reads
+  let MEM_DB = {};  // key: "pos||stack" -> { raw: string }
+
+  const COLL = collection(db, "trainer");           // collection name in Firestore
+  const KEY  = (p,s)=>`${p}||${s}`;
+
+  async function loadAllFromFirestore(){
+    MEM_DB = {}; // reset
+    const snap = await getDocs(COLL);
+    snap.forEach(docSnap=>{
+      const data = docSnap.data()||{};
+      MEM_DB[docSnap.id] = { raw: data.raw || "" };
+    });
+  }
+
+  // Live sync: listen to updates from others
+  function subscribeRealtime(){
+    onSnapshot(COLL, (snap)=>{
+      snap.docChanges().forEach(change=>{
+        const id = change.doc.id;
+        const data = change.doc.data()||{};
+        MEM_DB[id] = { raw: data.raw || "" };
+      });
+    });
+  }
+
+  // The old "get" and "set" used localStorage; now they use Firestore + cache.
+  function getCellRaw(pos, stk){
+    return (MEM_DB[KEY(pos,stk)]?.raw || "");
+  }
+  async function setCellRaw(pos, stk, raw){
+    MEM_DB[KEY(pos,stk)] = { raw: raw||"" };
+    await setDoc(doc(db,"trainer",KEY(pos,stk)), { raw: raw||"" });
+  }
+
+  // State
+  let curQ=null, count=0, right=0, streak=0;
+  let numBuf=""; let lastPressedBtn=null;
+
+  // Filters UI
+  function buildFilters(){
+    const posC=document.getElementById("posFilters"); posC.innerHTML="";
+    POS_LIST.forEach(p=>{
+      const lab=document.createElement("label"); lab.className="badge";
+      const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=true; cb.dataset.pos=p;
+      lab.appendChild(cb); lab.append(" "+p); posC.appendChild(lab);
+    });
+    const stkC=document.getElementById("stkFilters"); stkC.innerHTML="";
+    STKS.forEach(s=>{
+      const lab=document.createElement("label"); lab.className="badge";
+      const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=true; cb.dataset.stk=s;
+      lab.appendChild(cb); lab.append(" "+s); stkC.appendChild(lab);
+    });
+  }
+  buildFilters();
+
+  function getFilters(){
+    const posSel = Array.from(document.querySelectorAll('#posFilters input:checked')).map(x=>x.dataset.pos);
+    const stkSel = Array.from(document.querySelectorAll('#stkFilters input:checked')).map(x=>x.dataset.stk);
+    return { pos: posSel.length? posSel : POS_LIST.slice(), stk: stkSel.length? stkSel : STKS.slice() };
+  }
+
+  // RNG
+  const rand=arr=>arr[Math.floor(Math.random()*arr.length)];
+
+  // Generate
+  function askNew(){
+    const sel=getFilters();
+    const pos=rand(sel.pos);
+    const stk=rand(sel.stk);
+    const hand=rand(HANDS);
+    curQ={pos,stk,hand};
+    numBuf=""; lastPressedBtn=null;
+    document.getElementById("qHand").textContent=hand;
+    document.getElementById("qStack").textContent="Stack: "+stk;
+    document.getElementById("qPos").textContent="Position: "+pos;
+    document.getElementById("feedback").textContent="";
+    document.getElementById("correctRow").style.display="none";
+    document.getElementById("jokerPanel").style.display="none";
+    renderAnswerUI();
+  }
+
+  // Render answers
+  function renderAnswerUI(){
+    const a=document.getElementById("ansArea"); a.innerHTML="";
+    if(isPushPos(curQ.pos)){
+      const disp=document.createElement("div"); disp.className="disp"; disp.id="numDisp"; disp.textContent="Enter a number";
+      const grid=document.createElement("div"); grid.className="keypad";
+      const keys=["7","8","9","4","5","6","1","2","3",".","0","←"];
+      keys.forEach(k=>{
+        const b=document.createElement("button"); b.className="key"; b.textContent=k;
+        b.onclick=()=>keyPress(k);
+        grid.appendChild(b);
+      });
+      a.appendChild(disp); a.appendChild(grid);
+    }else{
+      const g=document.createElement("div"); g.className="actionsGrid";
+      Object.keys(COLORS).forEach(act=>{
+        const b=document.createElement("button");
+        b.className="actBtn";
+
+        const disp = resolveDisplay(curQ.pos, act);
+        const bg = disp.color || "#cccccc";
+        b.style.background = `linear-gradient(180deg, ${bg} 0%, ${bg} 72%, rgba(0,0,0,.06) 100%)`;
+
+        const lbl=document.createElement("span");
+        lbl.className="lbl";
+        lbl.innerHTML = disp.text.replace(/\//g,'/<br>');
+        b.appendChild(lbl);
+
+        const t=document.createElement("span"); t.className="tag";
+        t.textContent = (disp.text.includes("AI") || act.includes("AI")) ? "AI" : "";
+        b.appendChild(t);
+
+        b.onclick=()=>{ lastPressedBtn=b; checkAnswer(false, act); };
+        g.appendChild(b);
+      });
+      a.appendChild(g);
+    }
+  }
+  function updateDisp(){ const d=document.getElementById("numDisp"); if(d) d.textContent = numBuf.length? numBuf : "Enter a number"; }
+  function keyPress(k){
+    if(k==="←"){ numBuf=numBuf.slice(0,-1); updateDisp(); return; }
+    if(k==="." && numBuf.includes(".")) return;
+    if(numBuf.length>=6) return;
+    numBuf += k; updateDisp();
+  }
+
+  // Compute correct action
+  function compute(pos,hand,stk){
+    const raw=getCellRaw(pos,stk); // sync read of cached data
+    if(!raw) return {disp:"—", isNum:isPushPos(pos)};
+    const lines=raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    let map={},def=null;
+    lines.forEach(l=>{
+      const [h,v]=l.split("=").map(x=>x.trim());
+      if(v==null){def=h;} else if(/^default$/i.test(h)) def=v; else map[h.toUpperCase()]=v;
+    });
+    const disp = map[hand.toUpperCase()] || def || "—";
+    return {disp, isNum:isPushPos(pos)};
+  }
+
+  // === Joker (ONLY "table" and "flash") ===
+  const JOKER_MODES = ["table","flash"];
+  let jokerMode = localStorage.getItem("jokerMode") || "table";
+  const btnJokerMode = document.getElementById("btnJokerMode");
+  const jokerModeName = document.getElementById("jokerModeName");
+  const jokerContent  = document.getElementById("jokerContent");
+
+  function cycleJokerMode(){
+    const idx = (JOKER_MODES.indexOf(jokerMode)+1)%JOKER_MODES.length;
+    jokerMode = JOKER_MODES[idx];
+    localStorage.setItem("jokerMode", jokerMode);
+    jokerModeName.textContent = labelForMode(jokerMode);
+    renderJoker();
+  }
+  btnJokerMode.onclick = cycleJokerMode;
+
+  function labelForMode(m){
+    if(m==="table") return "Joker: 13×13 Table";
+    return "Joker: Flash Cards";
+  }
+
+  function renderJoker(){
+    const panel=document.getElementById("jokerPanel");
+    if(!curQ){ panel.style.display="none"; return; }
+    panel.style.display="block";
+    jokerModeName.textContent = labelForMode(jokerMode);
+    jokerContent.innerHTML="";
+
+    if(jokerMode==="table"){
+      // 13×13 table; in PUSH spots — numbers
+      const grid=document.createElement("div");
+      grid.className="jokerGrid";
+      const ranks=["A","K","Q","J","T","9","8","7","6","5","4","3","2"];
+      for(let i=0;i<13;i++){
+        for(let j=0;j<13;j++){
+          const cell=document.createElement("div");
+          cell.className="jk";
+          let h;
+          if(i===j) h=ranks[i]+ranks[j];
+          else if(i<j) h=ranks[i]+ranks[j]+"s";
+          else h=ranks[j]+ranks[i]+"o";
+          const r = compute(curQ.pos, h.toUpperCase(), curQ.stk);
+          if(r.isNum){
+            cell.textContent = (r.disp==="—")?"":r.disp; // number
+            cell.style.background = "#1a2335";
+            cell.style.color = "#fff";
+          }else{
+            const dd = resolveDisplay(curQ.pos, r.disp);
+            cell.textContent = h;
+            cell.style.background = dd.color || "#2a2f3c";
+            cell.style.color = "#000";
+          }
+          if(h.toUpperCase()===curQ.hand.toUpperCase()){
+            cell.classList.add("cur");
+          }
+          grid.appendChild(cell);
+        }
+      }
+      jokerContent.appendChild(grid);
+
+    }else if(jokerMode==="flash"){
+      // Flash Cards – similar hands with the same action (or same number in PUSH)
+      const wrap=document.createElement("div");
+      const title=document.createElement("div");
+      title.className="flashTitle";
+      title.textContent="Similar hands with the same action:";
+      wrap.appendChild(title);
+
+      const chips=document.createElement("div");
+      chips.className="flashWrap";
+
+      const curRes=compute(curQ.pos, curQ.hand.toUpperCase(), curQ.stk);
+      const target = curRes.disp; // action or number
+      const isNum = curRes.isNum;
+
+      function parseHand(h){
+        const m = /^([AKQJT98765432])([AKQJT98765432])(s|o)?$/i.exec(h);
+        if(!m) return null;
+        const r1=m[1].toUpperCase(), r2=m[2].toUpperCase(), so=(m[3]||"").toLowerCase();
+        return {r1,r2, pair:r1===r2, suited:so==="s", off:so==="o"};
+      }
+      const ph = parseHand(curQ.hand);
+
+      function isSimilar(h){
+        const p=parseHand(h); if(!p||!ph) return false;
+        if(ph.pair) return p.pair;                           // all pairs
+        if(ph.suited) return p.suited && p.r1===ph.r1;       // all Axs, Kxs etc.
+        if(ph.off) return p.off && p.r1===ph.r1;             // all Axo, Kxo etc.
+        return (p.r1===ph.r1 && p.r2===ph.r2);
+      }
+
+      for(const h of HANDS){
+        if(!isSimilar(h)) continue;
+        const r=compute(curQ.pos, h.toUpperCase(), curQ.stk);
+        if(r.disp==="—") continue;
+        if((!isNum && r.disp===target) || (isNum && Number(r.disp)===Number(target))){
+          const dd = resolveDisplay(curQ.pos, r.disp);
+          const chip=document.createElement("div");
+          chip.className="flashChip";
+          if(isNum){
+            chip.style.background="#1a2335"; chip.style.color="#fff";
+            chip.textContent = `${h} = ${r.disp}`;
+          }else{
+            chip.style.background=dd.color||"#2a2f3c"; chip.style.color="#000";
+            chip.textContent = h;
+          }
+          chips.appendChild(chip);
+        }
+      }
+      if(!chips.childNodes.length){
+        const none=document.createElement("div");
+        none.className="mini"; none.style.opacity=".8";
+        none.textContent="No other similar hands with the same action.";
+        wrap.appendChild(none);
+      }else{
+        wrap.appendChild(chips);
+      }
+      jokerContent.appendChild(wrap);
+    }
+  }
+
+  // Check + show joker
+  function checkAnswer(showOnly=false, chosenAct=null){
+    if(!curQ) return;
+    const res=compute(curQ.pos,curQ.hand,curQ.stk);
+    const fb=document.getElementById("feedback");
+    const cRow=document.getElementById("correctRow"); const cVal=document.getElementById("correctVal");
+
+    if(res.disp==="—"){
+      fb.textContent="No data for this combo."; fb.className="feedback";
+      cRow.style.display="flex"; cVal.textContent="—"; cVal.style.background="#2a2f3c"; cVal.style.color="#fff";
+      if(lastPressedBtn){ lastPressedBtn.classList.remove("ok","err"); }
+      const d=document.getElementById("numDisp"); if(d){ d.classList.remove("ok","err"); }
+      renderJoker();
+      cVal.classList.remove("clickable");
+      cVal.onclick=null;
+      return;
+    }
+
+    if(!showOnly){
+      count++;
+      let ok=false;
+      if(res.isNum){
+        const ans=Number(numBuf), tgt=Number(res.disp);
+        ok = Number.isFinite(ans) && Math.abs(ans-tgt)<=0.1;
+        const d=document.getElementById("numDisp");
+        if(d){ d.classList.toggle("ok",ok); d.classList.toggle("err",!ok); }
+      }else{
+        ok = chosenAct!=null && chosenAct===res.disp;
+        if(lastPressedBtn){
+          lastPressedBtn.classList.toggle("ok",ok);
+          lastPressedBtn.classList.toggle("err",!ok);
+        }
+      }
+      if(ok){ right++; streak++; fb.textContent="CORRECT!"; fb.className="feedback ok"; }
+      else  { streak=0; fb.textContent="WRONG"; fb.className="feedback err"; }
+      document.getElementById("qCount").textContent=count;
+      document.getElementById("qRight").textContent=right;
+      document.getElementById("streak").textContent=streak;
+    }
+
+    cRow.style.display="flex";
+    const dispRight = resolveDisplay(curQ.pos, res.disp);
+    cVal.textContent = res.isNum ? res.disp : dispRight.text;
+    if(res.isNum){
+      cVal.style.background="rgba(0,0,0,.22)"; cVal.style.color="#fff";
+    }else{
+      cVal.style.background = dispRight.color || "#2a2f3c"; cVal.style.color="#000";
+    }
+
+    // Joker (only after check)
+    renderJoker();
+
+    // Click “Correct:” -> next hand (NO animation)
+    cVal.classList.add("clickable");
+    cVal.title = "Click for next hand";
+    cVal.onclick = ()=>{ askNew(); };
+  }
+
+  // Editor
+  const editModal=document.getElementById("editModal");
+  const editPos=document.getElementById("editPos");
+  const editStk=document.getElementById("editStk");
+  const editArea=document.getElementById("editArea");
+
+  function openEditor(){
+    editPos.innerHTML = POS_LIST.map(p=>`<option value="${p}">${p}</option>`).join("");
+    editStk.innerHTML = STKS.map(s=>`<option value="${s}">${s}</option>`).join("");
+    editArea.value = getCellRaw(editPos.value, editStk.value) || "";
+    document.getElementById("editMeta").textContent=`(${editPos.value} × ${editStk.value})`;
+    editModal.classList.add("show");
+  }
+  document.getElementById("btnEdit").onclick=openEditor;
+  document.getElementById("editClose").onclick=()=>editModal.classList.remove("show");
+  editPos.addEventListener("change",()=>{editArea.value=getCellRaw(editPos.value,editStk.value)||""; document.getElementById("editMeta").textContent=`(${editPos.value} × ${editStk.value})`;});
+  editStk.addEventListener("change",()=>{editArea.value=getCellRaw(editPos.value,editStk.value)||""; document.getElementById("editMeta").textContent=`(${editPos.value} × ${editStk.value})`;});
+  document.getElementById("editSave").onclick=async()=>{
+    await setCellRaw(editPos.value, editStk.value, editArea.value);
+    editModal.classList.remove("show");
+  };
+  document.getElementById("editClear").onclick=async()=>{
+    if(confirm("Clear this cell?")){
+      await setCellRaw(editPos.value, editStk.value, "");
+      editModal.classList.remove("show");
+    }
+  };
+
+  // Controls
+  document.getElementById("btnStart").onclick=()=>{
+    count=right=streak=0;
+    document.getElementById("qCount").textContent=0; document.getElementById("qRight").textContent=0; document.getElementById("streak").textContent=0;
+    askNew();
+    // auto-hide settings
+    document.getElementById("settingsCard").classList.add("hidden");
+    document.getElementById("toggleSettings").textContent="Show";
+  };
+  document.getElementById("btnResetScore").onclick=()=>{
+    count=right=streak=0;
+    document.getElementById("qCount").textContent=0;
+    document.getElementById("qRight").textContent=0;
+    document.getElementById("streak").textContent=0;
+    document.getElementById("jokerPanel").style.display="none";
+  };
+  document.getElementById("btnNext").onclick=()=>{ askNew(); };
+  document.getElementById("btnCheck").onclick=()=>checkAnswer(false);
+
+  // Toggle settings
+  document.getElementById("toggleSettings").onclick=()=>{
+    const card=document.getElementById("settingsCard");
+    const btn=document.getElementById("toggleSettings");
+    const hid=card.classList.toggle("hidden");
+    btn.textContent=hid?"Show":"Hide";
+  };
+
+  // Init flow: load DB, enable UI, subscribe realtime
+  async function init(){
+    const preload = document.getElementById("preload");
+    const enableUI = (flag)=>{
+      document.getElementById("btnStart").disabled = !flag;
+      document.getElementById("btnResetScore").disabled = !flag;
+      document.getElementById("btnCheck").disabled = !flag;
+      document.getElementById("btnNext").disabled = !flag;
+    };
+
+    try{
+      await loadAllFromFirestore();   // initial pull
+      subscribeRealtime();            // live updates from others
+      // UI strings
+      document.getElementById("jokerPanel").style.display="none";
+      document.getElementById("jokerModeName").textContent = (function(m){
+        if(m==="table")return"Joker: 13×13 Table";
+        return "Joker: Flash Cards";
+      })(jokerMode);
+      enableUI(true);
+    }catch(err){
+      console.error("Firestore load failed:", err);
+      alert("Failed to connect to the online database. Check your Firebase config and network.");
+      enableUI(false);
+    }finally{
+      preload.classList.remove("show");
+    }
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
