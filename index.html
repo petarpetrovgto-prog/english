@@ -117,6 +117,11 @@
   #preload.show{display:flex}
   .spinner{border:4px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;width:44px;height:44px;animation:spin 1s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* cloud status */
+  .cloudBadge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:#0f1624;border-radius:999px;padding:6px 10px;font-weight:800}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .dot.ok{background:var(--ok)} .dot.err{background:var(--err)}
 </style>
 </head>
 <body>
@@ -125,6 +130,9 @@
     <span class="chip">Q: <b id="qCount">0</b></span>
     <span class="chip">✔: <b id="qRight">0</b></span>
     <span class="chip">🔥: <b id="streak">0</b></span>
+    <span id="cloudStatus" class="cloudBadge" title="Cloud connection">
+      <span class="dot" id="cloudDot"></span> <span id="cloudTxt">Offline</span>
+    </span>
   </div>
   <div style="display:flex;gap:8px">
     <button class="btn" id="btnEdit">Editor</button>
@@ -159,8 +167,8 @@
     </div>
 
     <div style="display:flex;gap:8px;margin-top:12px">
-      <button id="btnCheck" class="btn" style="flex:1;font-weight:900" disabled>Check</button>
-      <button id="btnNext" class="btn" style="flex:1;font-weight:900" disabled>Next</button>
+      <button id="btnCheck" class="btn" style="flex:1;font-weight:900">Check</button>
+      <button id="btnNext" class="btn" style="flex:1;font-weight:900">Next</button>
     </div>
   </div>
 
@@ -182,13 +190,13 @@
     <div class="sep"></div>
 
     <div class="row">
-      <button id="btnStart" class="btn" style="flex:1;font-weight:900" disabled>Start / Restart</button>
-      <button id="btnResetScore" class="btn" style="flex:1;font-weight:900" disabled>Reset score</button>
+      <button id="btnStart" class="btn" style="flex:1;font-weight:900">Start / Restart</button>
+      <button id="btnResetScore" class="btn" style="flex:1;font-weight:900">Reset score</button>
     </div>
   </div>
 </div>
 
-<!-- EDITOR -->
+<!-- EDITOR (lazy cloud) -->
 <div id="editModal" class="overlay">
   <div class="box">
     <div class="boxHead">
@@ -202,54 +210,46 @@
       </div>
       <div class="row mini">Format: <code>HAND = ACTION</code> or <code>default = ACTION</code>; for PUSH — number.</div>
       <textarea id="editArea" placeholder="AJo = L-C-AI&#10;default = Fold"></textarea>
+
+      <div class="sep"></div>
+
+      <div class="row">
+        <button class="btn" id="btnCloudConnect" style="flex:1;font-weight:900">Connect to Cloud</button>
+        <button class="btn" id="btnCloudPull" style="flex:1;font-weight:900" disabled>Pull from Cloud</button>
+      </div>
+      <div class="mini" style="opacity:.85">
+        <b>Tip:</b> Connect to Cloud loads Firebase SDK only now. Pull fetches all cells into this session.
+      </div>
     </div>
     <div class="boxFoot">
       <button id="editClear" class="btn">Clear this cell</button>
-      <div><button id="editSave" class="btn">Save</button></div>
+      <div style="display:flex;gap:8px">
+        <button id="editSave" class="btn">Save</button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Preloader -->
-<div id="preload" class="show" aria-live="polite" aria-busy="true">
-  <div class="spinner" title="Loading…"></div>
+<!-- Preloader (used only for brief cloud ops) -->
+<div id="preload" aria-live="polite" aria-busy="false">
+  <!-- hidden by default -->
 </div>
 
-<!-- Firebase + App -->
-<script type="module">
-/* -----------------------------------------------------------
-   1) Firebase imports
------------------------------------------------------------ */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import {
-  getFirestore, collection, doc, getDocs, getDoc, setDoc, onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+<script>
+/* ============================================================================
+   0) Optional offline seed: place a snapshot of your DB here (key => {raw})
+      This makes the app instantly usable without loading Firebase at startup.
+      Example:
+      window.PRESET_DB = {
+        "HUSB||7–10": { raw: "AJo = L-C-AI\ndefault = FOLD" },
+        "SBvsBU_PUSH||4–7": { raw: "default = 8.5" }
+      };
+   ========================================================================== */
+window.PRESET_DB = window.PRESET_DB || {}; // empty by default
 
-/* -----------------------------------------------------------
-   2) Firebase config (PUT YOUR KEYS HERE)
-      Replace the placeholder object below with your real config
-      from Firebase Console → Project settings → General → Your apps
------------------------------------------------------------ */
-const firebaseConfig = {
-  /* ==== REPLACE THIS WITH YOUR CONFIG ==== */
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MSG_ID",
-  appId: "YOUR_APP_ID"
-  /* ====================================== */
-};
-
-/* -----------------------------------------------------------
-   3) Initialize Firebase + Firestore
------------------------------------------------------------ */
-const app = initializeApp(firebaseConfig);
-const db  = getFirestore(app);
-
-/* -----------------------------------------------------------
-   4) App logic
------------------------------------------------------------ */
+/* ============================================================================
+   1) App logic (no Firebase at startup)
+   ========================================================================== */
 (function(){
   // Colors / actions
   const COLORS={"FOLD":"#f4f6fa","L-F-F":"#a7e8a7","L-C-F":"#155d15","L-C-AI":"#bcdcf3","L-R-AI":"#0b3a94","MR-F-F":"#ffe27a","MR-C-AI":"#7b4a2a","MR-4B-AI":"#e44747","SHOVE":"#6d4b8e"};
@@ -269,10 +269,7 @@ const db  = getFirestore(app);
 
   function resolveDisplay(key, act){
     const ali = alias(key, act);
-    return {
-      text: ali.d,
-      color: ali.c || COLORS[norm(act)] || ""
-    };
+    return { text: ali.d, color: ali.c || COLORS[norm(act)] || "" };
   }
 
   // Positions / stacks
@@ -453,42 +450,90 @@ T2o
 `.trim().split(/\s+/);
 
   /* ===========================
-     Online DB (Firestore) layer
+     Data layer (no Firebase at boot)
      =========================== */
-  // In-memory cache for quick sync reads
-  let MEM_DB = {};  // key: "pos||stack" -> { raw: string }
-
-  const COLL = collection(db, "trainer");           // collection name in Firestore
+  // In-memory store (starts from PRESET_DB)
+  let MEM_DB = JSON.parse(JSON.stringify(window.PRESET_DB || {}));
   const KEY  = (p,s)=>`${p}||${s}`;
 
-  async function loadAllFromFirestore(){
-    MEM_DB = {}; // reset
-    const snap = await getDocs(COLL);
+  // Cloud handles (loaded when user connects)
+  let cloud = {
+    connected: false,
+    db: null,
+    unsub: null,
+    config: {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_MSG_ID",
+      appId: "YOUR_APP_ID"
+    }
+  };
+
+  // helpers for cloud UI
+  const cloudDot = document.getElementById("cloudDot");
+  const cloudTxt = document.getElementById("cloudTxt");
+  function updateCloudBadge(){
+    if(cloud.connected){
+      cloudDot.className="dot ok";
+      cloudTxt.textContent="Online";
+    }else{
+      cloudDot.className="dot err";
+      cloudTxt.textContent="Offline";
+    }
+  }
+  updateCloudBadge();
+
+  async function connectCloud(){
+    if(cloud.connected && cloud.db) return cloud.db;
+    // lazy import Firebase
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const { getFirestore } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const app = initializeApp(cloud.config);
+    cloud.db  = getFirestore(app);
+    cloud.connected = true;
+    updateCloudBadge();
+    return cloud.db;
+  }
+
+  async function pullAllFromCloud(){
+    if(!cloud.connected) await connectCloud();
+    const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const coll = collection(cloud.db, "trainer");
+    const snap = await getDocs(coll);
+    let cnt=0;
     snap.forEach(docSnap=>{
       const data = docSnap.data()||{};
       MEM_DB[docSnap.id] = { raw: data.raw || "" };
+      cnt++;
     });
+    return cnt;
   }
 
-  // Live sync: listen to updates from others
-  function subscribeRealtime(){
-    onSnapshot(COLL, (snap)=>{
-      snap.docChanges().forEach(change=>{
-        const id = change.doc.id;
-        const data = change.doc.data()||{};
-        MEM_DB[id] = { raw: data.raw || "" };
+  async function subscribeRealtime(){
+    if(!cloud.connected) await connectCloud();
+    const { collection, onSnapshot } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const coll = collection(cloud.db, "trainer");
+    if(cloud.unsub) cloud.unsub();
+    cloud.unsub = onSnapshot(coll, (snap)=>{
+      snap.docChanges().forEach(ch=>{
+        const id=ch.doc.id;
+        const data=ch.doc.data()||{};
+        MEM_DB[id]={raw:data.raw||""};
       });
     });
   }
 
-  // The old "get" and "set" used localStorage; now they use Firestore + cache.
-  function getCellRaw(pos, stk){
-    return (MEM_DB[KEY(pos,stk)]?.raw || "");
+  async function saveCellCloud(pos,stk,raw){
+    if(!cloud.connected) await connectCloud();
+    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    await setDoc(doc(cloud.db,"trainer",KEY(pos,stk)), { raw: raw||"" });
   }
-  async function setCellRaw(pos, stk, raw){
-    MEM_DB[KEY(pos,stk)] = { raw: raw||"" };
-    await setDoc(doc(db,"trainer",KEY(pos,stk)), { raw: raw||"" });
-  }
+
+  // local getters/setters (always hit MEM_DB)
+  function getCellRaw(pos, stk){ return (MEM_DB[KEY(pos,stk)]?.raw || ""); }
+  function setCellRawLocal(pos, stk, raw){ MEM_DB[KEY(pos,stk)] = { raw: raw||"" }; }
 
   // State
   let curQ=null, count=0, right=0, streak=0;
@@ -583,9 +628,9 @@ T2o
     numBuf += k; updateDisp();
   }
 
-  // Compute correct action
+  // Compute correct action from MEM_DB
   function compute(pos,hand,stk){
-    const raw=getCellRaw(pos,stk); // sync read of cached data
+    const raw=getCellRaw(pos,stk);
     if(!raw) return {disp:"—", isNum:isPushPos(pos)};
     const lines=raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
     let map={},def=null;
@@ -793,13 +838,48 @@ T2o
   document.getElementById("editClose").onclick=()=>editModal.classList.remove("show");
   editPos.addEventListener("change",()=>{editArea.value=getCellRaw(editPos.value,editStk.value)||""; document.getElementById("editMeta").textContent=`(${editPos.value} × ${editStk.value})`;});
   editStk.addEventListener("change",()=>{editArea.value=getCellRaw(editPos.value,editStk.value)||""; document.getElementById("editMeta").textContent=`(${editPos.value} × ${editStk.value})`;});
+
+  // Cloud buttons in editor
+  const btnCloudConnect = document.getElementById("btnCloudConnect");
+  const btnCloudPull    = document.getElementById("btnCloudPull");
+
+  btnCloudConnect.onclick = async ()=>{
+    try{
+      await connectCloud();
+      btnCloudPull.disabled=false;
+      alert("Cloud connected. You can Pull and Save.");
+    }catch(e){
+      console.error(e); alert("Cloud connection failed. Check firebaseConfig.");
+    }
+  };
+
+  btnCloudPull.onclick = async ()=>{
+    try{
+      const n = await pullAllFromCloud();
+      alert(`Pulled ${n} cells from Cloud.`);
+      // refresh current editor cell text (in case it changed)
+      editArea.value = getCellRaw(editPos.value, editStk.value) || "";
+    }catch(e){
+      console.error(e); alert("Pull failed.");
+    }
+  };
+
   document.getElementById("editSave").onclick=async()=>{
-    await setCellRaw(editPos.value, editStk.value, editArea.value);
+    const p=editPos.value, s=editStk.value, raw=editArea.value;
+    setCellRawLocal(p,s,raw);
+    if(cloud.connected){
+      try{ await saveCellCloud(p,s,raw); }catch(e){ console.error(e); alert("Cloud save failed."); }
+    }
     editModal.classList.remove("show");
   };
+
   document.getElementById("editClear").onclick=async()=>{
     if(confirm("Clear this cell?")){
-      await setCellRaw(editPos.value, editStk.value, "");
+      const p=editPos.value, s=editStk.value;
+      setCellRawLocal(p,s,"");
+      if(cloud.connected){
+        try{ await saveCellCloud(p,s,""); }catch(e){ console.error(e); alert("Cloud clear failed."); }
+      }
       editModal.classList.remove("show");
     }
   };
@@ -831,78 +911,16 @@ T2o
     btn.textContent=hid?"Show":"Hide";
   };
 
-  // Init flow: load DB, enable UI, subscribe realtime
-  async function init(){
-    const preload = document.getElementById("preload");
-    const enableUI = (flag)=>{
-      document.getElementById("btnStart").disabled = !flag;
-      document.getElementById("btnResetScore").disabled = !flag;
-      document.getElementById("btnCheck").disabled = !flag;
-      document.getElementById("btnNext").disabled = !flag;
-    };
+  // Init UI
+  document.getElementById("jokerPanel").style.display="none";
+  document.getElementById("jokerModeName").textContent = (function(m){
+    if(m==="table")return"Joker: 13×13 Table";
+    return "Joker: Flash Cards";
+  })(jokerMode);
 
-    try{
-      await loadAllFromFirestore();   // initial pull
-      subscribeRealtime();            // live updates from others
-      // UI strings
-      document.getElementById("jokerPanel").style.display="none";
-      document.getElementById("jokerModeName").textContent = (function(m){
-        if(m==="table")return"Joker: 13×13 Table";
-        return "Joker: Flash Cards";
-      })(jokerMode);
-      enableUI(true);
-    }catch(err){
-      console.error("Firestore load failed:", err);
-      alert("Failed to connect to the online database. Check your Firebase config and network.");
-      enableUI(false);
-    }finally{
-      preload.classList.remove("show");
-    }
-  }
-
-  init();
+  // Start immediately (no cloud needed to play)
+  askNew();
 })();
-
-  ...
-<script>
-// ===== Тук е твоят голям Range Trainer код =====
-
-// Lazy loading Firebase
-let db = null;
-
-async function initFirebase() {
-  if (db) return db;
-  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-  const { getFirestore } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-
-  const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "YOUR_ID",
-    appId: "YOUR_APP_ID"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  return db;
-}
-
-async function get(p, r) {
-  const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-  const database = await initFirebase();
-  const ref = doc(database, "trainer", p + "||" + r);
-  const snap = await getDoc(ref);
-  return snap.exists() ? snap.data().raw : "";
-}
-
-async function set(p, r, raw) {
-  const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-  const database = await initFirebase();
-  const ref = doc(database, "trainer", p + "||" + r);
-  await setDoc(ref, { raw });
-}
 </script>
 </body>
 </html>
