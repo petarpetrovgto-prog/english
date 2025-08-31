@@ -9,7 +9,7 @@
     --bg:#0b0f14; --panel:#0f1520; --panel2:#101827; --border:#223047; --text:#e7ecf3;
     --FOLD:#f4f6fa; --L-F-F:#a7e8a7; --L-C-F:#155d15; --L-C-AI:#bcdcf3; --L-R-AI:#0b3a94;
     --MR-F-F:#ffe27a; --MR-C-AI:#7b4a2a; --MR-4B-AI:#e44747; --SHOVE:#6d4b8e;
-    --ok:#1f9d55; --err:#d64545;
+    --ok:#1f9d55; --err:#d64545; --muted:#8aa0c2;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   body{margin:0;background:var(--bg);color:var(--text);font:16px/1.35 -apple-system,system-ui,Segoe UI,Roboto,Arial}
@@ -70,12 +70,13 @@
          border-radius:999px;padding:6px 10px;font-weight:800;cursor:pointer}
   .badge input{accent-color:#4da3ff}
   .mini{font-size:12px;opacity:.8}
+  .muted{color:var(--muted)}
   .sep{height:1px;background:#223047;margin:10px 0}
 
   /* modals */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:60;align-items:center;justify-content:center;padding:16px}
   .overlay.show{display:flex}
-  .box{width:100%;max-width:680px;background:#0f1520;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .box{width:100%;max-width:720px;background:#0f1520;border:1px solid var(--border);border-radius:14px;overflow:hidden}
   .boxHead{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#101827;border-bottom:1px solid var(--border)}
   .boxBody{padding:10px 12px}
   .boxFoot{display:flex;gap:8px;justify-content:space-between;padding:10px 12px;border-top:1px solid var(--border);background:#0f1520}
@@ -112,16 +113,19 @@
   /* click “Correct:” -> next hand (no animation) */
   #correctVal.clickable{cursor:pointer}
 
-  /* simple full-screen preloader */
-  #preload{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;z-index:80;align-items:center;justify-content:center}
-  #preload.show{display:flex}
-  .spinner{border:4px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;width:44px;height:44px;animation:spin 1s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-
   /* cloud status */
   .cloudBadge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:#0f1624;border-radius:999px;padding:6px 10px;font-weight:800}
   .dot{width:10px;height:10px;border-radius:50%}
-  .dot.ok{background:var(--ok)} .dot.err{background:var(--err)}
+  .dot.ok{background:var(--ok)} .dot.err{background:var(--err)} .dot.muted{background:var(--muted)}
+
+  /* snackbar */
+  #snack{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#0f1624;border:1px solid var(--border);
+    padding:10px 14px;border-radius:10px;display:none;z-index:90}
+  #snack.show{display:block}
+
+  /* light divider in editor */
+  .subtle{border:1px dashed #2a3b58;border-radius:10px;padding:8px}
+
 </style>
 </head>
 <body>
@@ -131,7 +135,7 @@
     <span class="chip">✔: <b id="qRight">0</b></span>
     <span class="chip">🔥: <b id="streak">0</b></span>
     <span id="cloudStatus" class="cloudBadge" title="Cloud connection">
-      <span class="dot" id="cloudDot"></span> <span id="cloudTxt">Offline</span>
+      <span class="dot muted" id="cloudDot"></span> <span id="cloudTxt" class="muted">Idle</span>
     </span>
   </div>
   <div style="display:flex;gap:8px">
@@ -196,7 +200,7 @@
   </div>
 </div>
 
-<!-- EDITOR (lazy cloud) -->
+<!-- EDITOR -->
 <div id="editModal" class="overlay">
   <div class="box">
     <div class="boxHead">
@@ -209,16 +213,23 @@
         <select id="editStk" class="btn" style="flex:1"></select>
       </div>
       <div class="row mini">Format: <code>HAND = ACTION</code> or <code>default = ACTION</code>; for PUSH — number.</div>
-      <textarea id="editArea" placeholder="AJo = L-C-AI&#10;default = Fold"></textarea>
+
+      <textarea id="editArea" placeholder="AJo = L-C-AI&#10;default = FOLD"></textarea>
 
       <div class="sep"></div>
 
-      <div class="row">
-        <button class="btn" id="btnCloudConnect" style="flex:1;font-weight:900">Connect to Cloud</button>
-        <button class="btn" id="btnCloudPull" style="flex:1;font-weight:900" disabled>Pull from Cloud</button>
+      <div class="row subtle">
+        <div style="flex:1">
+          <div class="mini">Cloud status:</div>
+          <div class="mini" id="cloudInfo">Firebase SDK not loaded yet.</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" id="btnCloudPull" style="font-weight:900">Pull All</button>
+        </div>
       </div>
-      <div class="mini" style="opacity:.85">
-        <b>Tip:</b> Connect to Cloud loads Firebase SDK only now. Pull fetches all cells into this session.
+
+      <div class="mini" style="opacity:.85;margin-top:6px">
+        <b>Tip:</b> You can edit offline; saving will auto-connect to Firestore. Pull fetches all cells from the cloud into this session.
       </div>
     </div>
     <div class="boxFoot">
@@ -230,26 +241,42 @@
   </div>
 </div>
 
-<!-- Preloader (used only for brief cloud ops) -->
-<div id="preload" aria-live="polite" aria-busy="false">
-  <!-- hidden by default -->
-</div>
+<!-- Snackbar -->
+<div id="snack" role="status" aria-live="polite"></div>
 
 <script>
-/* ============================================================================
-   0) Optional offline seed: place a snapshot of your DB here (key => {raw})
-      This makes the app instantly usable without loading Firebase at startup.
+/* =============================================================================
+   0) Optional offline seed:
+      Put a snapshot of your DB here (key => {raw})
       Example:
       window.PRESET_DB = {
         "HUSB||7–10": { raw: "AJo = L-C-AI\ndefault = FOLD" },
         "SBvsBU_PUSH||4–7": { raw: "default = 8.5" }
       };
-   ========================================================================== */
+   ============================================================================ */
 window.PRESET_DB = window.PRESET_DB || {}; // empty by default
 
-/* ============================================================================
-   1) App logic (no Firebase at startup)
-   ========================================================================== */
+/* =============================================================================
+   1) Global flags
+   ============================================================================ */
+const AUTO_PULL_ON_LOAD = false; // set true if you want to fetch all cloud data right after page load
+
+/* =============================================================================
+   2) FIREBASE CONFIG — replace with your real keys
+      Firebase Console → Project settings → General → Your apps
+   ============================================================================ */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MSG_ID",
+  appId: "YOUR_APP_ID"
+};
+
+/* =============================================================================
+   3) App logic (lazy Firestore init: only when needed)
+   ============================================================================ */
 (function(){
   // Colors / actions
   const COLORS={"FOLD":"#f4f6fa","L-F-F":"#a7e8a7","L-C-F":"#155d15","L-C-AI":"#bcdcf3","L-R-AI":"#0b3a94","MR-F-F":"#ffe27a","MR-C-AI":"#7b4a2a","MR-4B-AI":"#e44747","SHOVE":"#6d4b8e"};
@@ -450,85 +477,86 @@ T2o
 `.trim().split(/\s+/);
 
   /* ===========================
-     Data layer (no Firebase at boot)
+     Data layer (MEM_DB + optional cloud)
      =========================== */
   // In-memory store (starts from PRESET_DB)
   let MEM_DB = JSON.parse(JSON.stringify(window.PRESET_DB || {}));
   const KEY  = (p,s)=>`${p}||${s}`;
 
-  // Cloud handles (loaded when user connects)
+  // Cloud handles
   let cloud = {
-    connected: false,
+    status: "idle",         // idle | connecting | online | error
     db: null,
     unsub: null,
-    config: {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_MSG_ID",
-      appId: "YOUR_APP_ID"
-    }
+    lastError: null
   };
 
-  // helpers for cloud UI
+  // UI refs
   const cloudDot = document.getElementById("cloudDot");
   const cloudTxt = document.getElementById("cloudTxt");
-  function updateCloudBadge(){
-    if(cloud.connected){
-      cloudDot.className="dot ok";
-      cloudTxt.textContent="Online";
-    }else{
-      cloudDot.className="dot err";
-      cloudTxt.textContent="Offline";
-    }
+  const cloudInfo = document.getElementById("cloudInfo");
+  function setCloudStatus(s, msg){
+    cloud.status = s;
+    if(s==="online"){ cloudDot.className="dot ok"; cloudTxt.textContent="Online"; cloudTxt.classList.remove("muted"); }
+    else if(s==="connecting"){ cloudDot.className="dot muted"; cloudTxt.textContent="Connecting…"; cloudTxt.classList.add("muted"); }
+    else if(s==="error"){ cloudDot.className="dot err"; cloudTxt.textContent="Error"; cloudTxt.classList.remove("muted"); }
+    else { cloudDot.className="dot muted"; cloudTxt.textContent="Idle"; cloudTxt.classList.add("muted"); }
+    if(msg){ cloudInfo.textContent = msg; }
   }
-  updateCloudBadge();
+  function snack(msg){ const s=document.getElementById("snack"); s.textContent=msg; s.classList.add("show"); setTimeout(()=>s.classList.remove("show"), 1800); }
 
-  async function connectCloud(){
-    if(cloud.connected && cloud.db) return cloud.db;
-    // lazy import Firebase
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const { getFirestore } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const app = initializeApp(cloud.config);
-    cloud.db  = getFirestore(app);
-    cloud.connected = true;
-    updateCloudBadge();
-    return cloud.db;
+  async function ensureCloud(){
+    if(cloud.db) return cloud.db;
+    try{
+      setCloudStatus("connecting","Loading Firebase SDK…");
+      const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+      const { getFirestore } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+      const app = initializeApp(firebaseConfig);
+      cloud.db  = getFirestore(app);
+      setCloudStatus("online","Connected to Firestore.");
+      return cloud.db;
+    }catch(err){
+      console.error("🔥 Firebase init error:", err);
+      cloud.lastError = err;
+      setCloudStatus("error","Failed to initialize Firebase.");
+      throw err;
+    }
   }
 
   async function pullAllFromCloud(){
-    if(!cloud.connected) await connectCloud();
-    const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const coll = collection(cloud.db, "trainer");
-    const snap = await getDocs(coll);
-    let cnt=0;
-    snap.forEach(docSnap=>{
-      const data = docSnap.data()||{};
-      MEM_DB[docSnap.id] = { raw: data.raw || "" };
-      cnt++;
-    });
-    return cnt;
-  }
-
-  async function subscribeRealtime(){
-    if(!cloud.connected) await connectCloud();
-    const { collection, onSnapshot } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const coll = collection(cloud.db, "trainer");
-    if(cloud.unsub) cloud.unsub();
-    cloud.unsub = onSnapshot(coll, (snap)=>{
-      snap.docChanges().forEach(ch=>{
-        const id=ch.doc.id;
-        const data=ch.doc.data()||{};
-        MEM_DB[id]={raw:data.raw||""};
+    try{
+      const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+      const db = await ensureCloud();
+      const coll = collection(db, "trainer");
+      const snap = await getDocs(coll);
+      let cnt=0;
+      snap.forEach(docSnap=>{
+        const data = docSnap.data()||{};
+        MEM_DB[docSnap.id] = { raw: data.raw || "" };
+        cnt++;
       });
-    });
+      snack(`Pulled ${cnt} cells from Cloud`);
+      console.log(`✅ Pulled ${cnt} docs from 'trainer'`);
+      return cnt;
+    }catch(e){
+      console.error("❌ Pull failed:", e);
+      snack("Pull failed (see console)");
+      throw e;
+    }
   }
 
   async function saveCellCloud(pos,stk,raw){
-    if(!cloud.connected) await connectCloud();
-    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    await setDoc(doc(cloud.db,"trainer",KEY(pos,stk)), { raw: raw||"" });
+    try{
+      const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+      const db = await ensureCloud();
+      await setDoc(doc(db,"trainer",KEY(pos,stk)), { raw: raw||"" });
+      console.log("✅ Cloud save OK:", KEY(pos,stk));
+      snack("Saved to Cloud");
+    }catch(e){
+      console.error("❌ Cloud save error:", e);
+      snack("Cloud save failed");
+      throw e;
+    }
   }
 
   // local getters/setters (always hit MEM_DB)
@@ -833,53 +861,55 @@ T2o
     editArea.value = getCellRaw(editPos.value, editStk.value) || "";
     document.getElementById("editMeta").textContent=`(${editPos.value} × ${editStk.value})`;
     editModal.classList.add("show");
+
+    // Lazy connect automatically when opening Editor
+    if(!cloud.db){
+      ensureCloud().catch(()=>{ /* error already surfaced */ });
+    }
   }
   document.getElementById("btnEdit").onclick=openEditor;
   document.getElementById("editClose").onclick=()=>editModal.classList.remove("show");
   editPos.addEventListener("change",()=>{editArea.value=getCellRaw(editPos.value,editStk.value)||""; document.getElementById("editMeta").textContent=`(${editPos.value} × ${editStk.value})`;});
   editStk.addEventListener("change",()=>{editArea.value=getCellRaw(editPos.value,editStk.value)||""; document.getElementById("editMeta").textContent=`(${editPos.value} × ${editStk.value})`;});
 
-  // Cloud buttons in editor
-  const btnCloudConnect = document.getElementById("btnCloudConnect");
-  const btnCloudPull    = document.getElementById("btnCloudPull");
-
-  btnCloudConnect.onclick = async ()=>{
+  // Pull All
+  document.getElementById("btnCloudPull").onclick = async ()=>{
     try{
-      await connectCloud();
-      btnCloudPull.disabled=false;
-      alert("Cloud connected. You can Pull and Save.");
-    }catch(e){
-      console.error(e); alert("Cloud connection failed. Check firebaseConfig.");
-    }
-  };
-
-  btnCloudPull.onclick = async ()=>{
-    try{
+      await ensureCloud();
       const n = await pullAllFromCloud();
-      alert(`Pulled ${n} cells from Cloud.`);
-      // refresh current editor cell text (in case it changed)
       editArea.value = getCellRaw(editPos.value, editStk.value) || "";
-    }catch(e){
-      console.error(e); alert("Pull failed.");
-    }
+    }catch(e){ /* snack already shown */ }
   };
 
-  document.getElementById("editSave").onclick=async()=>{
+  // Save
+  document.getElementById("editSave").onclick = async ()=>{
     const p=editPos.value, s=editStk.value, raw=editArea.value;
-    setCellRawLocal(p,s,raw);
-    if(cloud.connected){
-      try{ await saveCellCloud(p,s,raw); }catch(e){ console.error(e); alert("Cloud save failed."); }
+    try{
+      // update local immediately
+      setCellRawLocal(p,s,raw);
+      // and cloud (auto-connect if needed)
+      await ensureCloud();
+      await saveCellCloud(p,s,raw);
+      console.log("Saved cell:", KEY(p,s), raw);
+    }catch(e){
+      console.error("Save error:", e);
+    }finally{
+      editModal.classList.remove("show");
     }
-    editModal.classList.remove("show");
   };
 
-  document.getElementById("editClear").onclick=async()=>{
-    if(confirm("Clear this cell?")){
-      const p=editPos.value, s=editStk.value;
+  // Clear
+  document.getElementById("editClear").onclick = async ()=>{
+    if(!confirm("Clear this cell?")) return;
+    const p=editPos.value, s=editStk.value;
+    try{
       setCellRawLocal(p,s,"");
-      if(cloud.connected){
-        try{ await saveCellCloud(p,s,""); }catch(e){ console.error(e); alert("Cloud clear failed."); }
-      }
+      await ensureCloud();
+      await saveCellCloud(p,s,"");
+      console.log("Cleared cell:", KEY(p,s));
+    }catch(e){
+      console.error("Clear error:", e);
+    }finally{
       editModal.classList.remove("show");
     }
   };
@@ -911,15 +941,26 @@ T2o
     btn.textContent=hid?"Show":"Hide";
   };
 
-  // Init UI
+  // Initial UI setup
   document.getElementById("jokerPanel").style.display="none";
   document.getElementById("jokerModeName").textContent = (function(m){
     if(m==="table")return"Joker: 13×13 Table";
     return "Joker: Flash Cards";
   })(jokerMode);
 
+  // Optional: auto-pull cloud on load without blocking UI
+  (async ()=>{
+    if(AUTO_PULL_ON_LOAD){
+      try{
+        await ensureCloud();
+        await pullAllFromCloud();
+      }catch(e){ /* ignore, play from local seed */ }
+    }
+  })();
+
   // Start immediately (no cloud needed to play)
   askNew();
+
 })();
 </script>
 </body>
